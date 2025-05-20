@@ -128,15 +128,12 @@ def plot_concentrations_2d(compartments, molecule='glucose', **kwargs):
     ax.set_yticks(y_coords)
     # ax.grid(True, linestyle='--', alpha=0.4)
     fig.tight_layout()
-
     return fig, ax
-
-
 
 if __name__ == "__main__":
     compartments = generate_compartments(dims=[2, 2, 2], spacing=1)
     pprint(compartments)
-    compartments2 = generate_compartments(dims=[3, 3, 0], spacing=1)
+    compartments2 = generate_compartments(dims=[3, 3, 1], spacing=1)
     pprint(compartments2)
     edges = get_regular_edges(compartments, spacing=1)
     pprint(edges)

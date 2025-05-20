@@ -1,8 +1,11 @@
 from pprint import pprint
 
-from process_bigraph import Process, Step, Composite, ProcessTypes
-from process_bigraph.emitter import gather_emitter_results
-from spatial_transport.utils import get_regular_edges, generate_compartments, generate_shared_environments
+from process_bigraph import Process, Composite, ProcessTypes
+from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
+from spatial_transport.utils import get_regular_edges, generate_compartments, generate_shared_environments, plot_concentrations_2d
+import io
+import imageio.v2 as imageio
+import matplotlib.pyplot as plt
 
 class SimpleDiffusion(Process):
     """Simple diffusion between compartments"""
@@ -19,13 +22,13 @@ class SimpleDiffusion(Process):
 
     def inputs(self):
         return {
-            "compartments": "compartments",
+            "compartments": "map[compartment]",
             "edges": "map[edge_type]",
         }
 
     def outputs(self):
         return {
-            "compartments": "any"
+            "compartments": "map[compartment]"
         }
 
     def update(self, inputs, interval):
@@ -34,11 +37,13 @@ class SimpleDiffusion(Process):
 
         update = {
             compartment_id: {
-                'counts': {
-                    substrate: 0 for substrate in self.substrates.keys()
-                },
+                "Shared Environment": {
+                    'counts': {
+                        substrate: 0 for substrate in self.substrates.keys()
+                    },
+                }
             }
-        for compartment_id in compartments.keys()}
+            for compartment_id in compartments.keys()}
 
         for edge_id, edge in edges.items():
             compartment1 = compartments[edge["neighbors"][0]]
@@ -49,10 +54,10 @@ class SimpleDiffusion(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 diffusivity = self.substrates[substrate]
-                d_conc = -diffusivity * ((concentration2 - concentration1)/self.spacing) * self.spacing **2 * interval
-                update[edge["neighbors"][0]]["counts"][substrate] += -d_conc
-                update[edge["neighbors"][1]]["counts"][substrate] += d_conc
-        return update
+                d_conc = -diffusivity * (concentration2 - concentration1) * self.spacing ** 2 * interval
+                update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += -d_conc
+                update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += d_conc
+        return {"compartments": update}
 
 def get_simple_diffusion_spec(spacing, substrates, interval):
     return {
@@ -79,26 +84,16 @@ def run_simple_diffusion(core):
         "acetate": 0.12,
     }
     spec["Simple Diffusion"] = get_simple_diffusion_spec(spacing=1, substrates=substrates, interval = 0.1)
-    comps = generate_compartments(dims=[3, 3, 0], spacing=1)
+    comps = generate_compartments(dims=[5, 10, 0], spacing=1)
     comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
     spec["Compartments"] = comps
     edges = get_regular_edges(comps, spacing=1)
     spec["Edges"] = edges
     # set emitter specs
-    spec["emitter"] = {
-        "_type": "step",
-        "address": "local:ram-emitter",
-        "config": {
-            "emit": {
-                "compartments": "any",
-                "global_time": "any",
-            }
-        },
-        "inputs": {
-            "compartments": ["Compartments"],
-            "global_time": ["global_time"]
-        }
-    }
+    spec["emitter"] = emitter_from_wires({
+        "global_time": ["global_time"],
+        'compartments': ['Compartments'],
+    })
     print("Show Specs")
     pprint(spec)
     sim = Composite(
@@ -107,10 +102,19 @@ def run_simple_diffusion(core):
         },
         core=core
     )
-    sim.run(10)
+    sim.run(20)
     results = gather_emitter_results(sim)[("emitter",)]
-    print("Show Results")
-    pprint(results)
+    frames = []
+    for result in results:
+        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+
+        # Save fig to buffer
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        frames.append(imageio.imread(buf))
+        plt.close(fig)
+    imageio.mimsave('animated_plot.gif', frames, duration=1/60)
 
 if __name__ == "__main__":
     from spatial_transport import register_types
