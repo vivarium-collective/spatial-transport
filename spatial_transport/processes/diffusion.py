@@ -7,6 +7,8 @@ import io
 import imageio.v2 as imageio
 import matplotlib.pyplot as plt
 
+#Diffusion Processes
+
 class SimpleDiffusion(Process):
     """Simple diffusion between compartments"""
     config_schema = {
