@@ -5,11 +5,18 @@ import matplotlib.pyplot as plt
 
 COMPARTMENTS = "Compartments"
 
-def get_regular_edges(compartments, spacing=1.0):
+def get_regular_edges(voxels, periodic=False, spacing=1.0):
     """
-    Generates list of edge dictionaries for neighbor relationships between regular cubic compartments
+    Generates list of edge dictionaries for neighbor relationships between regular cubic voxels
     """
-    position_to_key = {tuple(v['position']): k for k, v in compartments.items()}
+    position_to_key = {tuple(v['position']): k for k, v in voxels.items()}
+    positions = np.array([v['position'] for v in voxels.values()])
+
+    # Determine bounds in each dimension
+    x_vals, y_vals, z_vals = positions[:, 0], positions[:, 1], positions[:, 2]
+    x_min, x_max = x_vals.min(), x_vals.max()
+    y_min, y_max = y_vals.min(), y_vals.max()
+    z_min, z_max = z_vals.min(), z_vals.max()
 
     # 6-connected neighbor offsets in 3D
     neighbor_offsets = [
@@ -22,59 +29,125 @@ def get_regular_edges(compartments, spacing=1.0):
     edge_id = 1
     seen_pairs = set()
 
-    for key, voxel in compartments.items():
+    for key, voxel in voxels.items():
         x, y, z = voxel['position']
         for dx, dy, dz in neighbor_offsets:
-            neighbor_pos = (x + dx, y + dy, z + dz)
+            nx, ny, nz = x + dx, y + dy, z + dz
+            wrapped = False
+            if periodic:
+                # Apply periodic wrapping
+                if nx > x_max:
+                    nx = x_min
+                    wrapped = True
+                if nx < x_min:
+                    nx = x_max
+                    wrapped = True
+                if ny > y_max:
+                    ny = y_min
+                    wrapped = True
+                if ny < y_min:
+                    ny = y_max
+                    wrapped = True
+                if nz > z_max:
+                    nz = z_min
+                    wrapped = True
+                if nz < z_min:
+                    nz = z_max
+                    wrapped = True
+
+            neighbor_pos = (nx, ny, nz)
             neighbor_key = position_to_key.get(neighbor_pos)
-            if neighbor_key:
+            if neighbor_key and neighbor_key != key:
                 edge_key = tuple(sorted([key, neighbor_key]))
                 if edge_key not in seen_pairs:
                     edge_label = f"{edge_id}"
                     edges[edge_label] = {}
                     edges[edge_label]['neighbors'] = [f"{comp}" for comp in edge_key]
                     edges[edge_label]['surface_area'] = spacing ** 2
+                    edges[edge_label]['periodic'] = wrapped
                     seen_pairs.add(edge_key)
                     edge_id += 1
     return edges
 
-def generate_compartments(dims, spacing):
+def generate_voxels(dims, spacing):
     """Creates a spec for shared environments in Euclidean Space
 
     Parameters:
-        dims: list of int, number of compartments in each spatial dimension [x, y, z]
-        spacing: float, spacing between neighboring compartments
+        dims: list of int, number of voxels in each spatial dimension [x, y, z]
+        spacing: float, spacing between neighboring voxels
     """
 
-    compartments = {}
-    compartment = 0
+    voxels = {}
+    voxel = 0
     for i in np.arange(spacing/2, spacing*dims[0], spacing):
         for j in np.arange(spacing/2, spacing*dims[1], spacing):
             if dims[2] != 0:
                 for k in np.arange(spacing/2, spacing*dims[2], spacing):
-                    compartments[f"{compartment}"] = {}
-                    compartments[f"{compartment}"]["position"] = [float(i), float(j), float(k)]
-                    compartment += 1
+                    voxels[f"{voxel}"] = {}
+                    voxels[f"{voxel}"]["position"] = [float(i), float(j), float(k)]
+                    voxel += 1
             else:
-                compartments[f"{compartment}"] = {}
+                voxels[f"{voxel}"] = {}
                 k=0
-                compartments[f"{compartment}"]["position"] = [float(i), float(j), float(k)]
-                compartment += 1
+                voxels[f"{voxel}"]["position"] = [float(i), float(j), float(k)]
+                voxel += 1
 
-    return compartments
+    return voxels
 
-def generate_shared_environments(compartments, spacing, substrates):
+def generate_shared_environments(voxels, spacing, substrates):
     """Generate random substrate concentrations"""
     volume = spacing ** 3
-    for key in compartments.keys():
-        compartments[key]['Shared Environment'] = {}
-        compartments[key]['Shared Environment']['volume'] = volume
-        compartments[key]['Shared Environment']['counts'] = {}
-        compartments[key]['Shared Environment']['concentrations'] = {}
+    for key in voxels.keys():
+        voxels[key]['Shared Environment'] = {}
+        voxels[key]['Shared Environment']['volume'] = volume
+        voxels[key]['Shared Environment']['counts'] = {}
+        voxels[key]['Shared Environment']['concentrations'] = {}
         for substrate in substrates:
             count = random.uniform(0, 10)
-            compartments[key]['Shared Environment']['counts'][substrate] = count
-            compartments[key]['Shared Environment']['concentrations'][substrate] = count/volume
+            voxels[key]['Shared Environment']['counts'][substrate] = count
+            voxels[key]['Shared Environment']['concentrations'][substrate] = count/volume
+    compartments = voxels
+    return compartments
+
+def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
+    """
+    Determines which compartments lie on the boundaries of the 3D domain
+    and which specific boundaries (x_min, x_max, y_min, etc.) they touch.
+
+    compartments: dict of form {key: {'position': (x, y, z)}}
+    num_dims: int, number of dimensions
+    spacing: grid spacing (used for floating point tolerance)
+
+    Returns:
+        boundary_info: dict {key: [list of boundary labels]}
+                       boundary labels are from {'x_min', 'x_max', 'y_min', 'y_max', 'z_min', 'z_max'}
+    """
+    import numpy as np
+
+    # Get all positions
+    positions = np.array([v['position'] for v in compartments.values()])
+    x_vals, y_vals, z_vals = positions[:, 0], positions[:, 1], positions[:, 2]
+
+    x_min, x_max = x_vals.min(), x_vals.max()
+    y_min, y_max = y_vals.min(), y_vals.max()
+    z_min, z_max = z_vals.min(), z_vals.max()
+
+    tolerance = spacing / 10  # To handle floating-point rounding
+
+    boundary_info = {}
+
+    for key, comp in compartments.items():
+        x, y, z = comp['position']
+        boundaries = []
+        if np.isclose(x, x_min, atol=tolerance): boundaries.append('x_min')
+        if np.isclose(x, x_max, atol=tolerance): boundaries.append('x_max')
+        if np.isclose(y, y_min, atol=tolerance): boundaries.append('y_min')
+        if np.isclose(y, y_max, atol=tolerance): boundaries.append('y_max')
+        if num_dims == 3:
+            if np.isclose(z, z_min, atol=tolerance): boundaries.append('z_min')
+            if np.isclose(z, z_max, atol=tolerance): boundaries.append('z_max')
+        compartments[key]["boundaries"] = boundaries
+
     return compartments
 
 def plot_concentrations_2d(compartments, molecule='glucose', **kwargs):
@@ -131,11 +204,14 @@ def plot_concentrations_2d(compartments, molecule='glucose', **kwargs):
     return fig, ax
 
 if __name__ == "__main__":
-    compartments = generate_compartments(dims=[2, 2, 2], spacing=1)
+    compartments = generate_voxels(dims=[2, 2, 2], spacing=1)
     pprint(compartments)
-    compartments2 = generate_compartments(dims=[3, 3, 1], spacing=1)
+    compartments2 = generate_voxels(dims=[3, 3, 1], spacing=1)
     pprint(compartments2)
-    edges = get_regular_edges(compartments, spacing=1)
+    edges = get_regular_edges(compartments2, spacing=1)
+    pprint(edges)
+    edges = get_regular_edges(compartments2, periodic=True, spacing=1)
+    print("Periodic Boundary Edges")
     pprint(edges)
     substrates = ["glucose", "acetate", "biomass"]
     compartments3 = generate_shared_environments(compartments2, spacing=1, substrates=substrates)
@@ -143,3 +219,5 @@ if __name__ == "__main__":
     kwargs = []
     fig, ax = plot_concentrations_2d(compartments3, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
     plt.show()
+
+    pprint(detect_boundary_positions(compartments2, num_dims=2, spacing=1))
