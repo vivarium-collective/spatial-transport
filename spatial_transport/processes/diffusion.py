@@ -22,6 +22,7 @@ class SimpleDiffusion(Process):
 
         self.substrates = config['substrates']
         self.spacing = config['spacing']
+        self.area = config['spacing'] ** 2
 
     def inputs(self):
         return {
@@ -57,7 +58,7 @@ class SimpleDiffusion(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 diffusivity = self.substrates[substrate]
-                d_conc = -diffusivity * (concentration2 - concentration1) * self.spacing ** 2 * interval
+                d_conc = -diffusivity * (concentration2 - concentration1) * self.area * interval
                 update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += -d_conc
                 update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += d_conc
         return {"compartments": update}
@@ -87,10 +88,10 @@ def run_simple_diffusion(core):
         "acetate": 0.12,
     }
     spec["Simple Diffusion"] = get_simple_diffusion_spec(spacing=1, substrates=substrates, interval = 0.1)
-    comps = generate_voxels(dims=[5, 10, 0], spacing=1)
+    comps = generate_voxels(dims=[10, 10, 0], spacing=1)
     comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, spacing=1)
+    edges = get_regular_edges(comps, periodic=False, spacing=1)
     spec["Edges"] = edges
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
@@ -109,7 +110,7 @@ def run_simple_diffusion(core):
     results = gather_emitter_results(sim)[("emitter",)]
     frames = []
     for result in results:
-        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', timepoint=result["global_time"], cmap='plasma', vmin=0, vmax=10)
         # Save fig to buffer
         buf = io.BytesIO()
         fig.savefig(buf, format='png')

@@ -150,13 +150,14 @@ def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
 
     return compartments
 
-def plot_concentrations_2d(compartments, molecule='glucose', **kwargs):
+def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **kwargs):
     """
     Plots a heatmap of the specified molecule's concentration for each compartment.
 
     Parameters:
-        compartments (dict): A dictionary of compartment data.
-        molecule (str): The molecule whose concentration to plot (default: 'glucose').
+        compartments : dict, A dictionary of compartment data.
+        molecule : str, The molecule whose concentration to plot (default: 'glucose').
+        timepoints : float, timepoint for the plot
         **kwargs: Additional keyword arguments passed to plt.imshow().
 
     Returns:
@@ -193,8 +194,10 @@ def plot_concentrations_2d(compartments, molecule='glucose', **kwargs):
     im = ax.imshow(grid, origin='lower', extent=extent, **kwargs)
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label(f'{molecule.capitalize()} Concentration')
-
-    ax.set_title(f'{molecule.capitalize()} Concentration Heatmap')
+    if timepoint is not None:
+        ax.set_title(f"t = {timepoint:.2f}")
+    else:
+        ax.set_title(f'{molecule.capitalize()} Concentration Heatmap')
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_xticks(x_coords)

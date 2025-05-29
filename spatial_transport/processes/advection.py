@@ -21,6 +21,7 @@ class SimpleAdvection(Process):
 
         self.substrates = config['substrates']
         self.spacing = config['spacing']
+        self.area = config['spacing'] ** 2
         self.advection = np.array(config['advection'])
         self.boundary = config['boundary']
 
@@ -89,9 +90,9 @@ class SimpleAdvection(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 if vn > 0:
-                    delta1 = -vn * concentration1 * self.spacing ** 2 * interval
+                    delta1 = -vn * concentration1 * self.area * interval
                 else:
-                    delta1 = -vn * concentration2 * self.spacing ** 2 * interval
+                    delta1 = -vn * concentration2 * self.area * interval
                 update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += delta1
                 update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += -delta1
 
@@ -124,13 +125,13 @@ def run_simple_advection(core):
         "acetate": 0.12,
     }
     substrate_list = list(substrates.keys())
-    advection = [0,1,0]
-    spec["Simple Advection"] = get_simple_advection_spec(spacing=1, substrates=substrate_list, advection=advection, boundary="periodic", interval=0.1)
-    comps = generate_voxels(dims=[5, 10, 0], spacing=1)
+    advection = [0.5,0.5,0]
+    spec["Simple Advection"] = get_simple_advection_spec(spacing=1, substrates=substrate_list, advection=advection, boundary="default", interval=0.1)
+    comps = generate_voxels(dims=[10, 10, 0], spacing=1)
     comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
     comps = detect_boundary_positions(comps, num_dims=2, spacing=1)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, periodic=True, spacing=1)
+    edges = get_regular_edges(comps, periodic=False, spacing=1)
     spec["Edges"] = edges
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
@@ -149,7 +150,7 @@ def run_simple_advection(core):
     results = gather_emitter_results(sim)[("emitter",)]
     frames = []
     for result in results:
-        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', timepoint=result["global_time"], cmap='plasma', vmin=0, vmax=10)
 
         # Save fig to buffer
         buf = io.BytesIO()
