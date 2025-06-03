@@ -12,17 +12,13 @@ import matplotlib.pyplot as plt
 class SimpleDiffusion(Process):
     """Simple diffusion between compartments"""
     config_schema = {
-        "spacing": "float",
         "substrates": "map[float]",
-        "dimension": "float", # "2D or 3D"
     }
 
     def __init__(self, config, core):
         super().__init__(config, core)
 
         self.substrates = config['substrates']
-        self.spacing = config['spacing']
-        self.area = config['spacing'] ** 2
 
     def inputs(self):
         return {
@@ -58,17 +54,16 @@ class SimpleDiffusion(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 diffusivity = self.substrates[substrate]
-                d_conc = -diffusivity * (concentration2 - concentration1) * self.area * interval
+                d_conc = -diffusivity * (concentration2 - concentration1) * edge["surface_area"] * interval
                 update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += -d_conc
                 update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += d_conc
         return {"compartments": update}
 
-def get_simple_diffusion_spec(spacing, substrates, interval):
+def get_simple_diffusion_spec(substrates, interval):
     return {
         "_type": "process",
         "address": "local:SimpleDiffusion",
         "config": {
-            "spacing": spacing,
             "substrates": substrates,
         },
         "inputs": {
@@ -87,7 +82,7 @@ def run_simple_diffusion(core):
         "glucose": 0.06,
         "acetate": 0.12,
     }
-    spec["Simple Diffusion"] = get_simple_diffusion_spec(spacing=1, substrates=substrates, interval = 0.1)
+    spec["Simple Diffusion"] = get_simple_diffusion_spec(substrates=substrates, interval = 0.1)
     comps = generate_voxels(dims=[10, 10, 0], spacing=1)
     comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
     spec["Compartments"] = comps
