@@ -105,7 +105,12 @@ def run_simple_diffusion(core):
     results = gather_emitter_results(sim)[("emitter",)]
     frames = []
     for result in results:
-        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', timepoint=result["global_time"], cmap='plasma', vmin=0, vmax=10)
+        fig, ax = plot_concentrations_2d(result["compartments"],
+                                         molecule='glucose',
+                                         timepoint=result["global_time"],
+                                         cmap='plasma',
+                                         vmin=0,
+                                         vmax=10)
         # Save fig to buffer
         buf = io.BytesIO()
         fig.savefig(buf, format='png')
