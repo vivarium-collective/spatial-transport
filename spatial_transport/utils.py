@@ -2,6 +2,7 @@ from pprint import pprint
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from cdFBA.utils import get_substrates, make_cdfba_composite
 
 COMPARTMENTS = "Compartments"
 
@@ -94,7 +95,19 @@ def generate_voxels(dims, spacing):
 
     return voxels
 
-def generate_shared_environments(voxels, spacing, substrates):
+def generate_shared_environment(volume, substrates, species, sub_range=(0, 10), bio_range=(0, 0.1)):
+    shared_environment = {'volume': volume, 'counts': {}, 'concentrations': {}}
+    for substrate in substrates:
+        count = random.uniform(sub_range[0], sub_range[1])
+        shared_environment['counts'][substrate] = count
+        shared_environment['concentrations'][substrate] = count/volume
+    for species in species:
+        biomass = random.uniform(bio_range[0], bio_range[1])
+        shared_environment['counts'][species] = biomass
+        shared_environment['concentrations'][species] = biomass/volume
+    return shared_environment
+
+def add_shared_environments(voxels, spacing, substrates):
     """Generate random substrate concentrations"""
     volume = spacing ** 3
     for key in voxels.keys():
@@ -150,6 +163,21 @@ def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
 
     return compartments
 
+#cdFBA Utility Functions
+def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, **kwargs):
+    substrates = []
+    species_list = [species for species in model_dict.keys()]
+    for species, model in model_dict.items():
+        substrates += get_substrates(model_file=model, exchanges=exchanges)
+    base_spec = make_cdfba_composite(model_dict=model_dict, exchanges=exchanges, volume=volume, interval=0.1)
+    for id in voxels:
+        spec = base_spec.copy()
+        shared_environment = generate_shared_environment(volume=1, substrates=substrates, species=species_list, **kwargs)
+        spec["Shared Environment"] = shared_environment
+        voxels[id].update(spec)
+    return voxels
+
+#plotting functions
 def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **kwargs):
     """
     Plots a heatmap of the specified molecule's concentration for each compartment.
@@ -207,20 +235,20 @@ def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **k
     return fig, ax
 
 if __name__ == "__main__":
-    compartments = generate_voxels(dims=[2, 2, 2], spacing=1)
-    pprint(compartments)
-    compartments2 = generate_voxels(dims=[3, 3, 1], spacing=1)
-    pprint(compartments2)
-    edges = get_regular_edges(compartments2, spacing=1)
-    pprint(edges)
-    edges = get_regular_edges(compartments2, periodic=True, spacing=1)
-    print("Periodic Boundary Edges")
-    pprint(edges)
-    substrates = ["glucose", "acetate", "biomass"]
-    compartments3 = generate_shared_environments(compartments2, spacing=1, substrates=substrates)
-    pprint({"Compartments": compartments3})
-    kwargs = []
-    fig, ax = plot_concentrations_2d(compartments3, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
-    plt.show()
-
-    pprint(detect_boundary_positions(compartments2, num_dims=2, spacing=1))
+#     compartments = generate_voxels(dims=[2, 2, 2], spacing=1)
+#     pprint(compartments)
+#     compartments2 = generate_voxels(dims=[3, 3, 1], spacing=1)
+#     pprint(compartments2)
+#     edges = get_regular_edges(compartments2, spacing=1)
+#     pprint(edges)
+#     edges = get_regular_edges(compartments2, periodic=True, spacing=1)
+#     print("Periodic Boundary Edges")
+#     pprint(edges)
+#     substrates = ["glucose", "acetate", "biomass"]
+#     compartments3 = add_shared_environments(compartments2, spacing=1, substrates=substrates)
+#     pprint({"Compartments": compartments3})
+#     kwargs = []
+#     fig, ax = plot_concentrations_2d(compartments3, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+#     plt.show()
+#     pprint(detect_boundary_positions(compartments2, num_dims=2, spacing=1))
+    pprint(generate_shared_environment(volume=1, substrates=["glucose", "acetate"], species=["boimass"]))
