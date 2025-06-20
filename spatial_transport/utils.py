@@ -95,9 +95,6 @@ def generate_voxels(dims, spacing):
 
     return voxels
 
-def run_test():
-    print("pass")
-
 def generate_shared_environment(volume, substrates, species, sub_range=(0, 10), bio_range=(0, 0.1)):
     shared_environment = {'volume': volume, 'counts': {}, 'concentrations': {}}
     for substrate in substrates:

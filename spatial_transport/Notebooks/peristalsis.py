@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     spec["emitter"] = emitter_from_wires({
         "global_time": ["global_time"],
-        'compartments': ["Compartments", "*", "Shared Environment"],
+        'compartments': ["Compartments"],
     })
 
     pprint(spec)
@@ -95,3 +95,10 @@ if __name__ == '__main__':
     #     frames.append(imageio.imread(buf))
     #     plt.close(fig)
     # imageio.mimsave('peristalsis.gif', frames, duration=1/60)
+    x_positions = [results[0]["compartments"][compartment]["position"][0] for compartment in
+                   results[0]["compartments"].keys()]
+    lactose_conc = [[results[timepoint]["compartments"][compartment]["Shared Environment"]["concentrations"]["Lactose C12H22O11"] for compartment in results[0]["compartments"].keys()] for timepoint in range(len(results))]
+    colors = plt.cm.plasma.colors
+    for i, y in enumerate(lactose_conc):
+        plt.plot(x_positions, y, color=colors[i])
+    plt.show()
