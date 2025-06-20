@@ -164,7 +164,7 @@ def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
     return compartments
 
 #cdFBA Utility Functions
-def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, **kwargs):
+def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, sub_range=(0, 10), bio_range=(0, 0.1)):
     substrates = []
     species_list = [species for species in model_dict.keys()]
     for species, model in model_dict.items():
@@ -172,7 +172,7 @@ def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, **kwa
     base_spec = make_cdfba_composite(model_dict=model_dict, exchanges=exchanges, volume=volume, interval=0.1)
     for id in voxels:
         spec = base_spec.copy()
-        shared_environment = generate_shared_environment(volume=1, substrates=substrates, species=species_list, **kwargs)
+        shared_environment = generate_shared_environment(volume=1, substrates=substrates, species=species_list, sub_range=sub_range, bio_range=bio_range)
         spec["Shared Environment"] = shared_environment
         voxels[id].update(spec)
     return voxels
