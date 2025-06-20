@@ -2,7 +2,7 @@ from pprint import pprint
 
 from process_bigraph import Process, Composite, ProcessTypes
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
-from spatial_transport.utils import get_regular_edges, generate_voxels, generate_shared_environments, plot_concentrations_2d
+from spatial_transport.utils import get_regular_edges, generate_voxels, add_shared_environments, plot_concentrations_2d
 import io
 import imageio.v2 as imageio
 import matplotlib.pyplot as plt
@@ -84,7 +84,7 @@ def run_simple_diffusion(core):
     }
     spec["Simple Diffusion"] = get_simple_diffusion_spec(substrates=substrates, interval = 0.1)
     comps = generate_voxels(dims=[10, 10, 0], spacing=1)
-    comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
+    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
     spec["Compartments"] = comps
     edges = get_regular_edges(comps, periodic=False, spacing=1)
     spec["Edges"] = edges

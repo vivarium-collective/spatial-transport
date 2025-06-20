@@ -6,7 +6,7 @@ import numpy as np
 
 from process_bigraph import Process, Composite, ProcessTypes
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
-from spatial_transport.utils import get_regular_edges, generate_voxels, generate_shared_environments, plot_concentrations_2d, detect_boundary_positions
+from spatial_transport.utils import get_regular_edges, generate_voxels, add_shared_environments, plot_concentrations_2d, detect_boundary_positions
 
 class SimpleAdvection(Process):
 
@@ -18,6 +18,7 @@ class SimpleAdvection(Process):
     }
 
     def __init__(self, config, core):
+        super().__init__(config, core)
 
         self.substrates = config['substrates']
         self.spacing = config['spacing']
@@ -128,7 +129,7 @@ def run_simple_advection(core):
     advection = [0.5,0.5,0]
     spec["Simple Advection"] = get_simple_advection_spec(spacing=1, substrates=substrate_list, advection=advection, boundary="default", interval=0.1)
     comps = generate_voxels(dims=[10, 10, 0], spacing=1)
-    comps = generate_shared_environments(comps, spacing=1, substrates=substrates)
+    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
     comps = detect_boundary_positions(comps, num_dims=2, spacing=1)
     spec["Compartments"] = comps
     edges = get_regular_edges(comps, periodic=False, spacing=1)
