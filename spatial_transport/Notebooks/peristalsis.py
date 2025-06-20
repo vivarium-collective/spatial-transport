@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     spec["emitter"] = emitter_from_wires({
         "global_time": ["global_time"],
-        'compartments': ["Compartments"],
+        'compartments': ["Compartments", "*", "Shared Environment"],
     })
 
     pprint(spec)
@@ -79,19 +79,19 @@ if __name__ == '__main__':
     sim.run(20)
     print(f"{time.time() - start_time} seconds")
     results = gather_emitter_results(sim)[("emitter",)]
-
-    frames = []
-    for result in results:
-        fig, ax = plot_concentrations_2d(result["compartments"],
-                                         molecule='Lactose C12H22O11',
-                                         timepoint=result["global_time"],
-                                         cmap='plasma',
-                                         vmin=0,
-                                         vmax=5)
-        # Save fig to buffer
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png')
-        buf.seek(0)
-        frames.append(imageio.imread(buf))
-        plt.close(fig)
-    imageio.mimsave('peristalsis.gif', frames, duration=1/60)
+    pprint(results)
+    # frames = []
+    # for result in results:
+    #     fig, ax = plot_concentrations_2d(result["compartments"],
+    #                                      molecule='Lactose C12H22O11',
+    #                                      timepoint=result["global_time"],
+    #                                      cmap='plasma',
+    #                                      vmin=0,
+    #                                      vmax=5)
+    #     # Save fig to buffer
+    #     buf = io.BytesIO()
+    #     fig.savefig(buf, format='png')
+    #     buf.seek(0)
+    #     frames.append(imageio.imread(buf))
+    #     plt.close(fig)
+    # imageio.mimsave('peristalsis.gif', frames, duration=1/60)
