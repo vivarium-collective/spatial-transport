@@ -65,6 +65,7 @@ def get_regular_edges(voxels, periodic=False, spacing=1.0):
                     edges[edge_label] = {}
                     edges[edge_label]['neighbors'] = [f"{comp}" for comp in edge_key]
                     edges[edge_label]['surface_area'] = spacing ** 2
+                    edges[edge_label]['position'] = [(a+b)/2 for a, b in zip([x, y, z], [nx, ny, nz])]
                     edges[edge_label]['periodic'] = wrapped
                     seen_pairs.add(edge_key)
                     edge_id += 1

@@ -86,7 +86,7 @@ def run_simple_diffusion(core):
     comps = generate_voxels(dims=[10, 10, 0], spacing=1)
     comps = add_shared_environments(comps, spacing=1, substrates=substrates)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, periodic=False, spacing=1)
+    edges = get_regular_edges(comps, periodic=True, spacing=1)
     spec["Edges"] = edges
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
@@ -103,28 +103,30 @@ def run_simple_diffusion(core):
     )
     sim.run(20)
     results = gather_emitter_results(sim)[("emitter",)]
+    pprint(results[0])
+
     frames = []
-    for result in results:
-        fig, ax = plot_concentrations_2d(result["compartments"],
-                                         molecule='glucose',
-                                         timepoint=result["global_time"],
-                                         cmap='plasma',
-                                         vmin=0,
-                                         vmax=10)
-        # Save fig to buffer
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png')
-        buf.seek(0)
-        frames.append(imageio.imread(buf))
-        plt.close(fig)
-    imageio.mimsave('diffusion_plot.gif', frames, duration=1/60)
-    counts = []
-    for result in results:
-        glucose = 0
-        for id, comp in result['compartments'].items():
-            glucose += comp["Shared Environment"]["counts"]["glucose"]
-        counts.append(glucose)
-    print(counts)
+    # for result in results:
+    #     fig, ax = plot_concentrations_2d(result["compartments"],
+    #                                      molecule='glucose',
+    #                                      timepoint=result["global_time"],
+    #                                      cmap='plasma',
+    #                                      vmin=0,
+    #                                      vmax=10)
+    #     # Save fig to buffer
+    #     buf = io.BytesIO()
+    #     fig.savefig(buf, format='png')
+    #     buf.seek(0)
+    #     frames.append(imageio.imread(buf))
+    #     plt.close(fig)
+    # imageio.mimsave('diffusion_plot.gif', frames, duration=1/60)
+    # counts = []
+    # for result in results:
+    #     glucose = 0
+    #     for id, comp in result['compartments'].items():
+    #         glucose += comp["Shared Environment"]["counts"]["glucose"]
+    #     counts.append(glucose)
+    # print(counts)
 
 if __name__ == "__main__":
     from spatial_transport import register_types

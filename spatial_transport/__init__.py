@@ -29,6 +29,10 @@ def volumetric_update(schema, current, update, top_schema, top_state, path, core
     # # Temp
     return applied
 
+def set_update(schema, current, update, top_schema, top_state, path, core):
+    """sets value instead of adding it"""
+    return update
+
 volumetric_type = {
     "concentrations":"map[float]",
     "counts":"map[float]",
@@ -39,11 +43,18 @@ volumetric_type = {
 edge_type = {
     "neighbors": "list[string]",
     "surface_area": "float",
+    "position": "list[float]",
 }
 
 compartment_type = {
     "Shared Environment": "volumetric",
     "position": "list[float]",
+}
+
+set_float = {
+    "_type": "set_float",
+    "_inherit": "float",
+    "_apply": set_update
 }
 
 def register_types(core):

@@ -39,7 +39,7 @@ def get_tyssue_edges(sheet):
 def generate_tyssue_environments(sheet, substrates):
     comps = {
         f"{i}" : {
-            "position": [float(sheet.face_df.loc[i][dim]) for dim in sheet.coords]
+            "position": [float(sheet.face_df.loc[sheet.face_df.loc == i][dim]) for dim in sheet.coords]
         }
         for i in range(len(sheet.face_df))
     }
@@ -80,7 +80,7 @@ def run_tyssue_diffusion(core, sheet, substrates):
     results = gather_emitter_results(sim)[("emitter",)]
     return results
 
-def static_sheet_video_2d(results, sheet, substrate, vmax):
+def static_sheet_video_2d(results, sheet, substrate, vmax, file_name="tyssue_diffusion.gif"):
     """
     Parameters:
         results: dict, Vivarium results
@@ -111,7 +111,7 @@ def static_sheet_video_2d(results, sheet, substrate, vmax):
         buf.seek(0)
         frames.append(imageio.imread(buf))
         plt.close(fig)
-        imageio.mimsave('tyssue_diffusion.gif', frames, duration=1 / 30, loop=0)
+        imageio.mimsave(file_name, frames, duration=1 / 30, loop=0)
 
 if __name__ == "__main__":
     sheet = Sheet.planar_sheet_3d("sheet", nx=20, ny=20, distx=1, disty=1, noise=0.1)
