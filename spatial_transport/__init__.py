@@ -24,10 +24,16 @@ def volumetric_update(schema, current, update, top_schema, top_state, path, core
         "concentrations": updated_concentrations,
         "volume": updated_volume,
     }
-    # # Temp
-    # import ipdb; ipdb.set_trace()
-    # # Temp
     return applied
+
+def set_update(schema, current, update, top_schema, top_state, path, core):
+    """sets value instead of adding it"""
+    return update
+
+def set_list_update(schema, current, update, top_schema, top_state, path, core):
+    """sets list values instead of adding them"""
+    return [i for i in update]
+
 
 volumetric_type = {
     "concentrations":"map[float]",
@@ -39,6 +45,7 @@ volumetric_type = {
 edge_type = {
     "neighbors": "list[string]",
     "surface_area": "float",
+    "position": "list[float]",
 }
 
 compartment_type = {
@@ -46,8 +53,22 @@ compartment_type = {
     "position": "list[float]",
 }
 
+set_float = {
+    "_type": "set_float",
+    "_inherit": "float",
+    "_apply": set_update
+}
+
+set_list = {
+    "_type": "set_list",
+    "_inherit": "list",
+    "_apply": set_list_update
+}
+
 def register_types(core):
     core.register("volumetric", volumetric_type)
     core.register("edge_type", edge_type)
     core.register("compartment", compartment_type)
+    core.register("set_float", set_float)
+    core.register("set_list", set_list)
     return register_processes(core)

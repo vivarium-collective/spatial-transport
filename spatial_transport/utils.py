@@ -1,5 +1,8 @@
 from pprint import pprint
 import numpy as np
+import pandas as pd
+import seaborn as sns
+import math
 import random
 import matplotlib.pyplot as plt
 from cdFBA.utils import get_substrates, make_cdfba_composite
@@ -65,6 +68,7 @@ def get_regular_edges(voxels, periodic=False, spacing=1.0):
                     edges[edge_label] = {}
                     edges[edge_label]['neighbors'] = [f"{comp}" for comp in edge_key]
                     edges[edge_label]['surface_area'] = spacing ** 2
+                    edges[edge_label]['position'] = [(a+b)/2 for a, b in zip([x, y, z], [nx, ny, nz])]
                     edges[edge_label]['periodic'] = wrapped
                     seen_pairs.add(edge_key)
                     edge_id += 1
@@ -177,19 +181,21 @@ def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, sub_r
         voxels[id].update(spec)
     return voxels
 
-#plotting functions
 def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **kwargs):
     """
-    Plots a heatmap of the specified molecule's concentration for each compartment.
+    Plots a heatmap of the specified molecule's concentration for each compartment using Seaborn.
 
     Parameters:
-        compartments : dict, A dictionary of compartment data.
-        molecule : str, The molecule whose concentration to plot (default: 'glucose').
-        timepoints : float, timepoint for the plot
-        **kwargs: Additional keyword arguments passed to plt.imshow().
+        compartments : dict
+            Dictionary of compartment data.
+        molecule : str
+            Molecule to plot (default: 'glucose').
+        timepoint : float
+            Timepoint for the title.
+        **kwargs : additional keyword arguments passed to sns.heatmap().
 
     Returns:
-        fig, ax: Matplotlib figure and axis objects.
+        fig, ax : Matplotlib figure and axis objects.
     """
     # Extract positions and concentrations
     positions = []
@@ -201,37 +207,74 @@ def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **k
         positions.append((loc[0], loc[1]))
         concentrations.append(conc)
 
-    # Build position maps
     positions = np.array(positions)
     concentrations = np.array(concentrations)
-    x_coords = sorted(set(loc[0] for loc in positions))
-    y_coords = sorted(set(loc[1] for loc in positions))
-    x_map = {x: i for i, x in enumerate(x_coords)}
-    y_map = {y: i for i, y in enumerate(y_coords)}
 
-    # Create the grid
-    grid = np.full((len(y_coords), len(x_coords)), np.nan)
-    for (x, y), value in zip(positions, concentrations):
-        xi = x_map[x]
-        yi = y_map[y]
-        grid[yi, xi] = value
+    # Create a DataFrame with X, Y, and concentration
+    df = pd.DataFrame({
+        'x': positions[:, 0],
+        'y': positions[:, 1],
+        molecule: concentrations
+    })
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(6, 5))
-    extent = [min(x_coords) - 0.5, max(x_coords) + 0.5, min(y_coords) - 0.5, max(y_coords) + 0.5]
-    im = ax.imshow(grid, origin='lower', extent=extent, **kwargs)
-    cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label(f'{molecule.capitalize()} Concentration')
+    # Pivot to make a 2D grid
+    grid = df.pivot(index='y', columns='x', values=molecule)
+
+    # Sort axes
+    grid = grid.sort_index(ascending=True)  # y-axis
+    grid = grid[sorted(grid.columns)]       # x-axis
+
+    # Plot with seaborn
+    fig, ax = plt.subplots(dpi=300)
+    sns.heatmap(grid, ax=ax, cbar_kws={'label': f'{molecule.capitalize()} Concentration', 'orientation':'horizontal'}, **kwargs)
+
     if timepoint is not None:
         ax.set_title(f"t = {timepoint:.2f}")
     else:
         ax.set_title(f'{molecule.capitalize()} Concentration Heatmap')
+
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
-    ax.set_xticks(x_coords)
-    ax.set_yticks(y_coords)
-    # ax.grid(True, linestyle='--', alpha=0.4)
+
     fig.tight_layout()
+    return fig, ax
+
+
+def plot_linear_kymograph(results, molecule='glucose', timepoints=None, axis='x', aspect=None, half_ticks=False, **kwargs):
+    """plots linear kymograph of compartments along a linear axis for a specified molecule"""
+    concentration_dict = {}
+    index = ["x", "y", "z"].index(axis)
+    compartments = results[0]["compartments"]
+    positions = [comp["position"][index] for comp in compartments.values()]
+
+    for timepoint in timepoints:
+        timepoint = float("{:.2f}".format(timepoint))
+        result = [r for r in results if math.isclose(r["global_time"], timepoint, rel_tol=1e-9)][0]
+        comps = result["compartments"]
+        concentrations = [
+            comp["Shared Environment"]["concentrations"].get(molecule, np.nan)
+            for comp in comps.values()
+        ]
+        concentration_dict.update({timepoint: concentrations})
+
+    concentration_df = pd.DataFrame(concentration_dict)
+    concentration_df.index = positions
+
+    fig, ax = plt.subplots(dpi=300)
+    sns.heatmap(
+        concentration_df,
+        ax=ax,
+        cbar_kws={"label": f"{molecule.capitalize()} Concentration (mM)"},
+        **kwargs
+    )
+
+    if aspect is not None:
+        ax.set_aspect(aspect)
+    if half_ticks:
+        ax.set_xticks(ax.get_xticks()[::2])
+    ax.set_ylabel(f"{axis}-position")
+    ax.set_xlabel("Timepoint")
+    ax.set_title("Concentration Kymograph")
     return fig, ax
 
 if __name__ == "__main__":
