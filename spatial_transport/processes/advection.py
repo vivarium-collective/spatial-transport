@@ -9,6 +9,8 @@ from process_bigraph import Process, Composite, Step, ProcessTypes
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
 from spatial_transport.utils import get_regular_edges, generate_voxels, add_shared_environments, plot_concentrations_2d, detect_boundary_positions
 
+ADVECTION = "Advection"
+
 class SimpleAdvection(Process):
     """
     This process performs a simple advection on a network of volume elements, along a fixed vector direction.
@@ -126,7 +128,7 @@ class DynamicAdvection(Process):
         return {
             "compartments": "map[compartment]",
             "edges": "map[edge_type]",
-            "advection": "map[list[float]]",
+            "advection": "map[set_list]",
         }
 
     def outputs(self):
@@ -148,6 +150,7 @@ class DynamicAdvection(Process):
         z_min, z_max = z_vals.min(), z_vals.max()
         max_values = {'x': x_max, 'y': y_max, 'z': z_max}
 
+        # Initialize update dictionary
         update = {
             compartment_id: {
                 "Shared Environment": {
@@ -158,6 +161,7 @@ class DynamicAdvection(Process):
             }
             for compartment_id in compartments.keys()}
 
+        # Iterate through all edges to calculate mass transfer across them
         for edge_id, edge in edges.items():
             compartment1 = edge["neighbors"][0]
             compartment2 = edge["neighbors"][1]
@@ -165,6 +169,7 @@ class DynamicAdvection(Process):
             conc2 = compartments[compartment2]['Shared Environment']['concentrations']
             pos1 = np.array(compartments[compartment1]["position"])
             pos2 = np.array(compartments[compartment2]["position"])
+            # Check for periodic boundaries
             if self.boundary == "default":
                 normal1 = (pos2 - pos1) / np.linalg.norm(pos2 - pos1)
             if self.boundary == "periodic":
@@ -173,15 +178,20 @@ class DynamicAdvection(Process):
                 if edge["periodic"]:
                     boundaries1 = compartments[compartment1]['boundaries']
                     boundaries2 = compartments[compartment2]['boundaries']
+                    # Shift boundary compartment position for normal calculation
                     for i, dim in enumerate(['x', 'y', 'z']):
                         dim_max = max_values[dim]
                         if f"{dim}_max" in boundaries2 and f"{dim}_min" in boundaries1:
                             pos1[i] += (dim_max + self.spacing / 2)
                         if f"{dim}_max" in boundaries1 and f"{dim}_min" in boundaries2:
                             pos2[i] += (dim_max + self.spacing / 2)
+                    # Calculate edge normal
                     normal1 = (pos2 - pos1) / np.linalg.norm(pos2 - pos1)
+            # Retrieve advection vector for edge
             advect = np.array(inputs['advection'][edge_id])
+            # Calculate dot product of normal and advection
             vn = np.dot(normal1, advect)
+            # Calculate direction and amount of mass transfer
             for substrate in self.substrates:
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
@@ -194,7 +204,7 @@ class DynamicAdvection(Process):
 
         return {"compartments": update}
 
-class Peristalsis(Step):
+class Peristalsis(Process):
     """This step calculates a vector field by assigning vectors to each edge in the simulation
     to simulate peristaltic fluid flow along the x-axis. A gaussian distribution is used to generate the
     wave pulses.
@@ -203,7 +213,8 @@ class Peristalsis(Step):
         "amplitude": "float",
         "velocity": "float",
         "wavelength": "float",
-        "interval": "float",
+        "period": "float",
+        "direction": "list[float]",
     }
 
     def __init__(self, config, core):
@@ -212,7 +223,8 @@ class Peristalsis(Step):
         self.amplitude = config["amplitude"]
         self.velocity = config["velocity"]
         self.wavelength = config["wavelength"]
-        self.interval = config["interval"]
+        self.period = config["period"]
+        self.direction = config["direction"]
 
     def inputs(self):
         return {
@@ -222,33 +234,53 @@ class Peristalsis(Step):
 
     def outputs(self):
         return {
-            "advection": "map[list[set_float]]",
+            "advection": "map[set_list]",
         }
 
-    def update(self, inputs):
+    def update(self, inputs, interval):
         advection = {}
         t = inputs["global_time"]
 
-        #Compute position of each wave center at time t
-        wave_centers = [self.velocity * (t - i * self.interval) for i in range(int(t//self.interval) + 1)]
+        # Normalize direction vector once
+        dx, dy, dz = self.direction
+        norm = math.sqrt(dx * dx + dy * dy + dz * dz)
+        dx, dy, dz = dx / norm, dy / norm, dz / norm
+        direction = np.array([dx, dy, dz])
 
-        for edge_id, edge in inputs["edges"].items():
-            #Edge coordinates
-            x, y, z = edge["position"][0], edge["position"][1], edge["position"][2]
+        # Precompute Gaussian denominator
+        sigma = self.wavelength / 2.355
+        denom = 2 * sigma * sigma
 
-            #Initialize vector
-            vx, vy, vz = 0, 0, 0
+        # Precompute wave centers (1D array)
+        n_waves = int(t // self.period) + 1
+        base_shift = self.velocity * t
+        interval_shift = self.velocity * self.period
+        wave_centers = base_shift - np.arange(n_waves) * interval_shift
 
-            for center in wave_centers:
-                distance = x - center
-                envelope = math.exp(- (distance ** 2) / (2 * (self.wavelength / 2.355) ** 2))
+        # Collect edge positions into array (N, 3)
+        edge_ids = list(inputs["edges"].keys())
+        positions = np.array([inputs["edges"][eid]["position"] for eid in edge_ids])
 
-                #add wave contribution
-                vx += envelope * self.amplitude
+        # Project positions along direction (N,)
+        projections = positions @ direction
 
-            advection.update({edge_id: [vx, vy, vz]})
+        # Compute all distances (N, n_waves) by broadcasting
+        distances = projections[:, None] - wave_centers[None, :]
 
-            return {"advection": advection}
+        # Gaussian envelopes (N, n_waves)
+        envelopes = np.exp(-(distances ** 2) / denom)
+
+        # Sum contributions over waves (N,)
+        contribs = envelopes.sum(axis=1) * self.amplitude
+
+        # Multiply by direction vector → (N, 3)
+        velocities = contribs[:, None] * direction
+
+        # Map back to dictionary
+        for eid, vel in zip(edge_ids, velocities):
+            advection[eid] = tuple(vel)
+
+        return {"advection": advection}
 
 def get_simple_advection_spec(spacing, substrates, advection, boundary, interval):
     return {
@@ -273,21 +305,43 @@ def get_simple_advection_spec(spacing, substrates, advection, boundary, interval
 def get_dynamic_advection_spec(spacing, substrates, boundary, interval):
     return {
         "_type": "process",
-        "address": "local:SimpleAdvection",
+        "address": "local:DynamicAdvection",
         "config": {
             "spacing": spacing,
             "substrates": substrates,
             "boundary": boundary,
+            "interval": interval,
         },
         "inputs": {
             "compartments": ["Compartments"],
             "edges": ["Edges"],
-            "advection": ["Advection"]
+            "advection": [ADVECTION]
         },
         "outputs": {
             "compartments": ["Compartments"],
         },
         "interval": interval
+    }
+
+def get_peristalsis_spec(amplitude, velocity, wavelength, period, direction, interval):
+    return {
+        "_type": "process",
+        "address": "local:Peristalsis",
+        "config": {
+            "amplitude": amplitude,
+            "velocity": velocity,
+            "wavelength": wavelength,
+            "period": period,
+            "direction": direction,
+            "interval": interval,
+        },
+        "inputs": {
+            "edges": ["Edges"],
+            "global_time": ["global_time"],
+        },
+        "outputs": {
+            "advection": [ADVECTION],
+        }
     }
 
 def run_simple_advection(core):
@@ -332,6 +386,50 @@ def run_simple_advection(core):
         plt.close(fig)
     imageio.mimsave('advection_plot.gif', frames, duration=1/60)
 
+def run_dynamic_advection(core):
+    spec = {}
+    substrates = {
+        "glucose": 0.06,
+        "acetate": 0.12,
+    }
+    substrate_list = list(substrates.keys())
+    advection = [0.5,0.5,0]
+    spec["Dynamic Advection"] = get_dynamic_advection_spec(spacing=1, substrates=substrate_list, boundary="default", interval=0.1)
+    comps = generate_voxels(dims=[24, 1, 0], spacing=1)
+    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
+    comps = detect_boundary_positions(comps, num_dims=2, spacing=1)
+    spec["Compartments"] = comps
+    edges = get_regular_edges(comps, periodic=False, spacing=1)
+    spec["Edges"] = edges
+    spec["Peristalsis"] = get_peristalsis_spec(amplitude=6, velocity=3, wavelength=2, period=3, direction=[1, 0, 0], interval=0.1)
+    spec[ADVECTION] = {edge_id:[0,0,0] for edge_id in edges}
+    # set emitter specs
+    spec["emitter"] = emitter_from_wires({
+        "global_time": ["global_time"],
+        'compartments': ['Compartments'],
+    })
+    print("Show Specs")
+    pprint(spec)
+    sim = Composite(
+        {
+            "state": spec,
+        },
+        core=core
+    )
+    sim.run(20)
+    results = gather_emitter_results(sim)[("emitter",)]
+    frames = []
+    for result in results:
+        fig, ax = plot_concentrations_2d(result["compartments"], molecule='glucose', timepoint=result["global_time"], cmap='plasma', vmin=0, vmax=10)
+
+        # Save fig to buffer
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        frames.append(imageio.imread(buf))
+        plt.close(fig)
+    imageio.mimsave('advection_plot.gif', frames, duration=1/60)
+
 if __name__ == "__main__":
     from spatial_transport import register_types
     # create the core object
@@ -340,4 +438,5 @@ if __name__ == "__main__":
     core = register_types(core)
     core.register_process("SimpleAdvection", SimpleAdvection)
 
-    run_simple_advection(core)
+    # run_simple_advection(core)
+    run_dynamic_advection(core)
