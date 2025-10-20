@@ -9,9 +9,15 @@ from cdFBA.utils import get_substrates, make_cdfba_composite
 
 COMPARTMENTS = "Compartments"
 
-def get_regular_edges(voxels, periodic=False, spacing=1.0):
+def get_regular_edges(voxels, periodic=False, spacing=[1,1,1]):
     """
     Generates list of edge dictionaries for neighbor relationships between regular cubic voxels
+
+    Parameters:
+        voxels: dict, output from generate_voxels function
+        periodic: bool, True if periodic boundary conditions are desired
+        spacing: list, spatial spacing in all three spatial directions [x,y,z],
+            must be same as used to generate voxels
     """
     position_to_key = {tuple(v['position']): k for k, v in voxels.items()}
     positions = np.array([v['position'] for v in voxels.values()])
@@ -22,11 +28,13 @@ def get_regular_edges(voxels, periodic=False, spacing=1.0):
     y_min, y_max = y_vals.min(), y_vals.max()
     z_min, z_max = z_vals.min(), z_vals.max()
 
-    # 6-connected neighbor offsets in 3D
+    dx, dy, dz = spacing
+
+    # 6-connected neighbor offsets in 3D (accounting for anisotropic spacing)
     neighbor_offsets = [
-        (spacing, 0, 0), (-spacing, 0, 0),
-        (0, spacing, 0), (0, -spacing, 0),
-        (0, 0, spacing), (0, 0, -spacing)
+        (dx, 0, 0), (-dx, 0, 0),
+        (0, dy, 0), (0, -dy, 0),
+        (0, 0, dz), (0, 0, -dz)
     ]
 
     edges = {}
@@ -35,11 +43,13 @@ def get_regular_edges(voxels, periodic=False, spacing=1.0):
 
     for key, voxel in voxels.items():
         x, y, z = voxel['position']
-        for dx, dy, dz in neighbor_offsets:
+        for offset in neighbor_offsets:
+            dx, dy, dz = offset
             nx, ny, nz = x + dx, y + dy, z + dz
             wrapped = False
+
             if periodic:
-                # Apply periodic wrapping
+                # Apply periodic wrapping for each dimension independently
                 if nx > x_max:
                     nx = x_min
                     wrapped = True
@@ -67,36 +77,46 @@ def get_regular_edges(voxels, periodic=False, spacing=1.0):
                     edge_label = f"{edge_id}"
                     edges[edge_label] = {}
                     edges[edge_label]['neighbors'] = [f"{comp}" for comp in edge_key]
-                    edges[edge_label]['surface_area'] = spacing ** 2
-                    edges[edge_label]['position'] = [(a+b)/2 for a, b in zip([x, y, z], [nx, ny, nz])]
+                    # Surface area now reflects the appropriate orthogonal face area
+                    if offset[0] != 0:
+                        surface_area = spacing[1] * spacing[2]
+                    elif offset[1] != 0:
+                        surface_area = spacing[0] * spacing[2]
+                    else:
+                        surface_area = spacing[0] * spacing[1]
+                    edges[edge_label]['surface_area'] = surface_area
+                    edges[edge_label]['position'] = [(a + b) / 2 for a, b in zip([x, y, z], [nx, ny, nz])]
                     edges[edge_label]['periodic'] = wrapped
                     seen_pairs.add(edge_key)
                     edge_id += 1
+
     return edges
 
-def generate_voxels(dims, spacing):
+def generate_voxels(dims, spacing=[1,1,1]):
     """Creates a spec for shared environments in Euclidean Space
 
     Parameters:
         dims: list of int, number of voxels in each spatial dimension [x, y, z]
-        spacing: float, spacing between neighboring voxels
+        spacing: list, spacing between neighboring voxels in each spatial dimension [x, y, z]
     """
 
     voxels = {}
     voxel = 0
-    for i in np.arange(spacing/2, spacing*dims[0], spacing):
-        for j in np.arange(spacing/2, spacing*dims[1], spacing):
+    for i in np.arange(spacing[0]/2, spacing[0]*dims[0], spacing[0]):
+        for j in np.arange(spacing[1]/2, spacing[1]*dims[1], spacing[1]):
             if dims[2] != 0:
-                for k in np.arange(spacing/2, spacing*dims[2], spacing):
-                    voxels[f"{voxel}"] = {}
-                    voxels[f"{voxel}"]["position"] = [float(i), float(j), float(k)]
-                    voxel += 1
+                if spacing[2] != 0:
+                    for k in np.arange(spacing[2]/2, spacing[2]*dims[2], spacing[2]):
+                        voxels[f"{voxel}"] = {}
+                        voxels[f"{voxel}"]["position"] = [round(float(i), 2), round(float(j), 2), round(float(k), 2)]
+                        voxel += 1
+                else:
+                    raise ValueError("z-spacing cannot be 0")
             else:
                 voxels[f"{voxel}"] = {}
-                k=0
-                voxels[f"{voxel}"]["position"] = [float(i), float(j), float(k)]
+                k=spacing[2]/2
+                voxels[f"{voxel}"]["position"] = [round(float(i), 2), round(float(j), 2), round(float(k), 2)]
                 voxel += 1
-
     return voxels
 
 def generate_shared_environment(volume, substrates, species, sub_range=(0, 10), bio_range=(0, 0.1)):
@@ -111,16 +131,21 @@ def generate_shared_environment(volume, substrates, species, sub_range=(0, 10), 
         shared_environment['concentrations'][species] = biomass/volume
     return shared_environment
 
-def add_shared_environments(voxels, spacing, substrates):
-    """Generate random substrate concentrations"""
-    volume = spacing ** 3
+def add_shared_environments(voxels, substrates, spacing = [1,1,1]):
+    """Generate random substrate concentrations
+    Parameters:
+        voxels: dict, spatial voxels output from the generate_voxels function
+        spacing: list, spacing between neighboring voxels in each spatial dimension [x, y, z]
+        substrates: list, substrate names output from the generate_shared_environment function
+    """
+    volume = spacing[0] * spacing[1] * spacing[2]
     for key in voxels.keys():
         voxels[key]['Shared Environment'] = {}
         voxels[key]['Shared Environment']['volume'] = volume
         voxels[key]['Shared Environment']['counts'] = {}
         voxels[key]['Shared Environment']['concentrations'] = {}
         for substrate in substrates:
-            count = random.uniform(0, 10)
+            count = random.uniform(0, 1)
             voxels[key]['Shared Environment']['counts'][substrate] = count
             voxels[key]['Shared Environment']['concentrations'][substrate] = count/volume
     compartments = voxels
@@ -278,20 +303,21 @@ def plot_linear_kymograph(results, molecule='glucose', timepoints=None, axis='x'
     return fig, ax
 
 if __name__ == "__main__":
-#     compartments = generate_voxels(dims=[2, 2, 2], spacing=1)
-#     pprint(compartments)
-#     compartments2 = generate_voxels(dims=[3, 3, 1], spacing=1)
-#     pprint(compartments2)
-#     edges = get_regular_edges(compartments2, spacing=1)
-#     pprint(edges)
-#     edges = get_regular_edges(compartments2, periodic=True, spacing=1)
+    spacing = [1, 0.1, 1]
+    dims = [2, 5, 1]
+    # voxels = generate_voxels(dims=dims, spacing=spacing)
+    # pprint(voxels)
+    voxels2 = generate_voxels(dims=dims, spacing=spacing)
+    pprint(voxels2)
+    edges = get_regular_edges(voxels2, spacing=spacing)
+    pprint(edges)
+#     edges = get_regular_edges(voxels2, periodic=True, spacing=1)
 #     print("Periodic Boundary Edges")
 #     pprint(edges)
-#     substrates = ["glucose", "acetate", "biomass"]
-#     compartments3 = add_shared_environments(compartments2, spacing=1, substrates=substrates)
-#     pprint({"Compartments": compartments3})
-#     kwargs = []
-#     fig, ax = plot_concentrations_2d(compartments3, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
-#     plt.show()
-#     pprint(detect_boundary_positions(compartments2, num_dims=2, spacing=1))
-    pprint(generate_shared_environment(volume=1, substrates=["glucose", "acetate"], species=["boimass"]))
+    substrates = ["glucose", "acetate", "biomass"]
+    compartments = add_shared_environments(voxels2, substrates=substrates, spacing=spacing)
+    pprint({"Compartments": compartments})
+    fig, ax = plot_concentrations_2d(compartments, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+    plt.show()
+#     pprint(detect_boundary_positions(voxels2, num_dims=2, spacing=1))
+#     pprint(generate_shared_environment(volume=1, substrates=["glucose", "acetate"], species=["boimass"]))
