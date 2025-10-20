@@ -131,7 +131,7 @@ def generate_shared_environment(volume, substrates, species, sub_range=(0, 10), 
         shared_environment['concentrations'][species] = biomass/volume
     return shared_environment
 
-def add_shared_environments(voxels, substrates, spacing = [1,1,1]):
+def add_shared_environments(voxels, substrates, spacing = [1,1,1], min_max = [0, 5]):
     """Generate random substrate concentrations
     Parameters:
         voxels: dict, spatial voxels output from the generate_voxels function
@@ -145,7 +145,7 @@ def add_shared_environments(voxels, substrates, spacing = [1,1,1]):
         voxels[key]['Shared Environment']['counts'] = {}
         voxels[key]['Shared Environment']['concentrations'] = {}
         for substrate in substrates:
-            count = random.uniform(0, 1)
+            count = random.uniform(min_max[0], min_max[1])
             voxels[key]['Shared Environment']['counts'][substrate] = count
             voxels[key]['Shared Environment']['concentrations'][substrate] = count/volume
     compartments = voxels
@@ -208,20 +208,10 @@ def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, sub_r
 
 def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **kwargs):
     """
-    Plots a heatmap of the specified molecule's concentration for each compartment using Seaborn.
-
-    Parameters:
-        compartments : dict
-            Dictionary of compartment data.
-        molecule : str
-            Molecule to plot (default: 'glucose').
-        timepoint : float
-            Timepoint for the title.
-        **kwargs : additional keyword arguments passed to sns.heatmap().
-
-    Returns:
-        fig, ax : Matplotlib figure and axis objects.
+    Plots a heatmap of the specified molecule's concentration for each compartment,
+    where the axis tick distances are proportional to the actual spatial intervals.
     """
+
     # Extract positions and concentrations
     positions = []
     concentrations = []
@@ -235,24 +225,58 @@ def plot_concentrations_2d(compartments, molecule='glucose', timepoint=None, **k
     positions = np.array(positions)
     concentrations = np.array(concentrations)
 
-    # Create a DataFrame with X, Y, and concentration
+    # Build DataFrame
     df = pd.DataFrame({
         'x': positions[:, 0],
         'y': positions[:, 1],
         molecule: concentrations
     })
 
-    # Pivot to make a 2D grid
+    # Create pivot table for heatmap
     grid = df.pivot(index='y', columns='x', values=molecule)
 
     # Sort axes
-    grid = grid.sort_index(ascending=True)  # y-axis
-    grid = grid[sorted(grid.columns)]       # x-axis
+    grid = grid.sort_index(ascending=True)  # y
+    grid = grid[sorted(grid.columns)]       # x
 
-    # Plot with seaborn
+    # Compute intervals between centers
+    x_vals = np.sort(grid.columns.to_numpy())
+    y_vals = np.sort(grid.index.to_numpy())
+
+    if len(x_vals) > 1:
+        dx = np.mean(np.diff(x_vals))
+    else:
+        dx = 1
+    if len(y_vals) > 1:
+        dy = np.mean(np.diff(y_vals))
+    else:
+        dy = 1
+
+    # Compute the extent of the image so that cell sizes reflect Δx and Δy
+    # First value is at half-interval (so extent starts at min - Δ/2)
+    extent = [
+        x_vals[0] - dx/2, x_vals[-1] + dx/2,
+        y_vals[0] - dy/2, y_vals[-1] + dy/2
+    ]
+
+    # Plot
     fig, ax = plt.subplots(dpi=300)
-    sns.heatmap(grid, ax=ax, cbar_kws={'label': f'{molecule.capitalize()} Concentration', 'orientation':'horizontal'}, **kwargs)
 
+    sns.heatmap(
+        grid, ax=ax, cbar_kws={'label': f'{molecule.capitalize()} Concentration', 'orientation': 'horizontal'},
+        **kwargs
+    )
+
+    # Adjust aspect ratio so distances are proportional
+    ax.set_aspect(dy / dx)
+
+    # Adjust tick labels to be at physical positions
+    ax.set_xticks(np.arange(len(x_vals)) + 0.5)
+    ax.set_xticklabels([f"{x:.1f}" for x in x_vals])
+    ax.set_yticks(np.arange(len(y_vals)) + 0.5)
+    ax.set_yticklabels([f"{y:.1f}" for y in y_vals])
+
+    # Title and labels
     if timepoint is not None:
         ax.set_title(f"t = {timepoint:.2f}")
     else:
@@ -303,7 +327,7 @@ def plot_linear_kymograph(results, molecule='glucose', timepoints=None, axis='x'
     return fig, ax
 
 if __name__ == "__main__":
-    spacing = [1, 0.1, 1]
+    spacing = [2, 1, 2]
     dims = [2, 5, 1]
     # voxels = generate_voxels(dims=dims, spacing=spacing)
     # pprint(voxels)
@@ -317,7 +341,7 @@ if __name__ == "__main__":
     substrates = ["glucose", "acetate", "biomass"]
     compartments = add_shared_environments(voxels2, substrates=substrates, spacing=spacing)
     pprint({"Compartments": compartments})
-    fig, ax = plot_concentrations_2d(compartments, molecule='glucose', cmap='plasma', vmin=0, vmax=10)
+    fig, ax = plot_concentrations_2d(compartments, molecule='glucose', cmap='plasma', vmin=0, vmax=2)
     plt.show()
 #     pprint(detect_boundary_positions(voxels2, num_dims=2, spacing=1))
 #     pprint(generate_shared_environment(volume=1, substrates=["glucose", "acetate"], species=["boimass"]))

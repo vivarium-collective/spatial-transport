@@ -48,8 +48,8 @@ class SimpleDiffusion(Process):
         for edge_id, edge in edges.items():
             compartment1 = compartments[edge["neighbors"][0]]
             compartment2 = compartments[edge["neighbors"][1]]
-            conc1 = compartments[edge["neighbors"][0]]['Shared Environment']['concentrations']
-            conc2 = compartments[edge["neighbors"][1]]['Shared Environment']['concentrations']
+            conc1 = compartment1['Shared Environment']['concentrations']
+            conc2 = compartment2['Shared Environment']['concentrations']
             for substrate in self.substrates.keys():
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
@@ -83,10 +83,11 @@ def run_simple_diffusion(core):
         "acetate": 0.12,
     }
     spec["Simple Diffusion"] = get_simple_diffusion_spec(substrates=substrates, interval = 0.1)
-    comps = generate_voxels(dims=[10, 10, 0], spacing=1)
-    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
+    spacing = [2, 1, 1]
+    comps = generate_voxels(dims=[10, 10, 0], spacing=spacing)
+    comps = add_shared_environments(comps, spacing=spacing, substrates=substrates)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, periodic=True, spacing=1)
+    edges = get_regular_edges(comps, periodic=True, spacing=spacing)
     spec["Edges"] = edges
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
@@ -103,30 +104,30 @@ def run_simple_diffusion(core):
     )
     sim.run(20)
     results = gather_emitter_results(sim)[("emitter",)]
-    pprint(results[0])
+    pprint(results[90])
 
     frames = []
-    # for result in results:
-    #     fig, ax = plot_concentrations_2d(result["compartments"],
-    #                                      molecule='glucose',
-    #                                      timepoint=result["global_time"],
-    #                                      cmap='plasma',
-    #                                      vmin=0,
-    #                                      vmax=10)
-    #     # Save fig to buffer
-    #     buf = io.BytesIO()
-    #     fig.savefig(buf, format='png')
-    #     buf.seek(0)
-    #     frames.append(imageio.imread(buf))
-    #     plt.close(fig)
-    # imageio.mimsave('diffusion_plot.gif', frames, duration=1/60)
-    # counts = []
-    # for result in results:
-    #     glucose = 0
-    #     for id, comp in result['compartments'].items():
-    #         glucose += comp["Shared Environment"]["counts"]["glucose"]
-    #     counts.append(glucose)
-    # print(counts)
+    for result in results:
+        fig, ax = plot_concentrations_2d(result["compartments"],
+                                         molecule='glucose',
+                                         timepoint=result["global_time"],
+                                         cmap='plasma',
+                                         vmin=0,
+                                         vmax=10)
+        # Save fig to buffer
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        buf.seek(0)
+        frames.append(imageio.imread(buf))
+        plt.close(fig)
+    imageio.mimsave('diffusion_plot.gif', frames, duration=1/60)
+    counts = []
+    for result in results:
+        glucose = 0
+        for id, comp in result['compartments'].items():
+            glucose += comp["Shared Environment"]["counts"]["glucose"]
+        counts.append(glucose)
+    print(counts)
 
 if __name__ == "__main__":
     from spatial_transport import register_types

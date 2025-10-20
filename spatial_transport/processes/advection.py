@@ -17,7 +17,7 @@ class SimpleAdvection(Process):
     """
 
     config_schema = {
-        "spacing": "float",
+        "spacing": "list[float]",
         "substrates": "list[string]",
         "advection": "list[float]", #advection velocity vector
         "boundary": "string", # default or periodic
@@ -28,7 +28,6 @@ class SimpleAdvection(Process):
 
         self.substrates = config['substrates']
         self.spacing = config['spacing']
-        self.area = config['spacing'] ** 2
         self.advection = np.array(config['advection'])
         self.boundary = config['boundary']
 
@@ -70,6 +69,7 @@ class SimpleAdvection(Process):
         for edge_id, edge in edges.items():
             compartment1 = edge["neighbors"][0]
             compartment2 = edge["neighbors"][1]
+            area = edge["surface_area"]
             conc1 = compartments[compartment1]['Shared Environment']['concentrations']
             conc2 = compartments[compartment2]['Shared Environment']['concentrations']
             pos1 = np.array(compartments[compartment1]["position"])
@@ -95,9 +95,9 @@ class SimpleAdvection(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 if vn > 0:
-                    delta1 = -vn * concentration1 * self.area * interval
+                    delta1 = -vn * concentration1 * area * interval
                 else:
-                    delta1 = -vn * concentration2 * self.area * interval
+                    delta1 = -vn * concentration2 * area * interval
                 update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += delta1
                 update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += -delta1
 
@@ -111,7 +111,7 @@ class DynamicAdvection(Process):
     """
 
     config_schema = {
-        "spacing": "float",
+        "spacing": "list[float]",
         "substrates": "list[string]",
         "boundary": "string",  # default or periodic
     }
@@ -121,7 +121,6 @@ class DynamicAdvection(Process):
 
         self.substrates = config['substrates']
         self.spacing = config['spacing']
-        self.area = config['spacing'] ** 2
         self.boundary = config['boundary']
 
     def inputs(self):
@@ -163,6 +162,7 @@ class DynamicAdvection(Process):
 
         # Iterate through all edges to calculate mass transfer across them
         for edge_id, edge in edges.items():
+            area = edge["surface_area"]
             compartment1 = edge["neighbors"][0]
             compartment2 = edge["neighbors"][1]
             conc1 = compartments[compartment1]['Shared Environment']['concentrations']
@@ -196,9 +196,9 @@ class DynamicAdvection(Process):
                 concentration1 = conc1[substrate]
                 concentration2 = conc2[substrate]
                 if vn > 0:
-                    delta1 = -vn * concentration1 * self.area * interval
+                    delta1 = -vn * concentration1 * area * interval
                 else:
-                    delta1 = -vn * concentration2 * self.area * interval
+                    delta1 = -vn * concentration2 * area * interval
                 update[edge["neighbors"][0]]["Shared Environment"]["counts"][substrate] += delta1
                 update[edge["neighbors"][1]]["Shared Environment"]["counts"][substrate] += -delta1
 
