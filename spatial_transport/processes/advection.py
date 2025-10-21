@@ -85,9 +85,9 @@ class SimpleAdvection(Process):
                     for i, dim in enumerate(['x', 'y', 'z']):
                         dim_max = max_values[dim]
                         if f"{dim}_max" in boundaries2 and f"{dim}_min" in boundaries1:
-                            pos1[i] += (dim_max + self.spacing/2)
+                            pos1[i] += (dim_max + self.spacing[i]/2)
                         if f"{dim}_max" in boundaries1 and f"{dim}_min" in boundaries2:
-                            pos2[i] += (dim_max + self.spacing/2)
+                            pos2[i] += (dim_max + self.spacing[i]/2)
                     normal1 = (pos2 - pos1) / np.linalg.norm(pos2 - pos1)
             advect = self.advection
             vn = np.dot(normal1, advect)
@@ -182,9 +182,9 @@ class DynamicAdvection(Process):
                     for i, dim in enumerate(['x', 'y', 'z']):
                         dim_max = max_values[dim]
                         if f"{dim}_max" in boundaries2 and f"{dim}_min" in boundaries1:
-                            pos1[i] += (dim_max + self.spacing / 2)
+                            pos1[i] += (dim_max + self.spacing[i] / 2)
                         if f"{dim}_max" in boundaries1 and f"{dim}_min" in boundaries2:
-                            pos2[i] += (dim_max + self.spacing / 2)
+                            pos2[i] += (dim_max + self.spacing[i] / 2)
                     # Calculate edge normal
                     normal1 = (pos2 - pos1) / np.linalg.norm(pos2 - pos1)
             # Retrieve advection vector for edge
@@ -352,12 +352,13 @@ def run_simple_advection(core):
     }
     substrate_list = list(substrates.keys())
     advection = [0.5,0.5,0]
-    spec["Simple Advection"] = get_simple_advection_spec(spacing=1, substrates=substrate_list, advection=advection, boundary="default", interval=0.1)
-    comps = generate_voxels(dims=[10, 10, 0], spacing=1)
-    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
-    comps = detect_boundary_positions(comps, num_dims=2, spacing=1)
+    spacing = [1, 1, 1]
+    spec["Simple Advection"] = get_simple_advection_spec(spacing=spacing, substrates=substrate_list, advection=advection, boundary="default", interval=0.1)
+    comps = generate_voxels(dims=[10, 10, 0], spacing=spacing)
+    comps = add_shared_environments(comps, spacing=spacing, substrates=substrates)
+    comps = detect_boundary_positions(comps, num_dims=2, spacing=spacing)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, periodic=False, spacing=1)
+    edges = get_regular_edges(comps, periodic=False, spacing=spacing)
     spec["Edges"] = edges
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
@@ -392,14 +393,15 @@ def run_dynamic_advection(core):
         "glucose": 0.06,
         "acetate": 0.12,
     }
+    spacing = [1, 1, 1]
     substrate_list = list(substrates.keys())
     advection = [0.5,0.5,0]
-    spec["Dynamic Advection"] = get_dynamic_advection_spec(spacing=1, substrates=substrate_list, boundary="default", interval=0.1)
-    comps = generate_voxels(dims=[24, 1, 0], spacing=1)
-    comps = add_shared_environments(comps, spacing=1, substrates=substrates)
-    comps = detect_boundary_positions(comps, num_dims=2, spacing=1)
+    spec["Dynamic Advection"] = get_dynamic_advection_spec(spacing=spacing, substrates=substrate_list, boundary="default", interval=0.1)
+    comps = generate_voxels(dims=[24, 1, 0], spacing=spacing)
+    comps = add_shared_environments(comps, spacing=spacing, substrates=substrates)
+    comps = detect_boundary_positions(comps, num_dims=2, spacing=spacing)
     spec["Compartments"] = comps
-    edges = get_regular_edges(comps, periodic=False, spacing=1)
+    edges = get_regular_edges(comps, periodic=False, spacing=spacing)
     spec["Edges"] = edges
     spec["Peristalsis"] = get_peristalsis_spec(amplitude=6, velocity=3, wavelength=2, period=3, direction=[1, 0, 0], interval=0.1)
     spec[ADVECTION] = {edge_id:[0,0,0] for edge_id in edges}
