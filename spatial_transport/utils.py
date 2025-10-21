@@ -151,7 +151,7 @@ def add_shared_environments(voxels, substrates, spacing = [1,1,1], min_max = [0,
     compartments = voxels
     return compartments
 
-def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
+def detect_boundary_positions(compartments, num_dims = 3, spacing=[1,1,1]):
     """
     Determines which compartments lie on the boundaries of the 3D domain
     and which specific boundaries (x_min, x_max, y_min, etc.) they touch.
@@ -174,20 +174,22 @@ def detect_boundary_positions(compartments, num_dims = 3, spacing=1.0):
     y_min, y_max = y_vals.min(), y_vals.max()
     z_min, z_max = z_vals.min(), z_vals.max()
 
-    tolerance = spacing / 10  # To handle floating-point rounding
+    tolerance_x = spacing[0] / 10  # To handle floating-point rounding
+    tolerance_y = spacing[1] / 10
+    tolerance_z = spacing[2] / 10
 
     boundary_info = {}
 
     for key, comp in compartments.items():
         x, y, z = comp['position']
         boundaries = []
-        if np.isclose(x, x_min, atol=tolerance): boundaries.append('x_min')
-        if np.isclose(x, x_max, atol=tolerance): boundaries.append('x_max')
-        if np.isclose(y, y_min, atol=tolerance): boundaries.append('y_min')
-        if np.isclose(y, y_max, atol=tolerance): boundaries.append('y_max')
+        if np.isclose(x, x_min, atol=tolerance_x): boundaries.append('x_min')
+        if np.isclose(x, x_max, atol=tolerance_x): boundaries.append('x_max')
+        if np.isclose(y, y_min, atol=tolerance_y): boundaries.append('y_min')
+        if np.isclose(y, y_max, atol=tolerance_y): boundaries.append('y_max')
         if num_dims == 3:
-            if np.isclose(z, z_min, atol=tolerance): boundaries.append('z_min')
-            if np.isclose(z, z_max, atol=tolerance): boundaries.append('z_max')
+            if np.isclose(z, z_min, atol=tolerance_z): boundaries.append('z_min')
+            if np.isclose(z, z_max, atol=tolerance_z): boundaries.append('z_max')
         compartments[key]["boundaries"] = boundaries
 
     return compartments
