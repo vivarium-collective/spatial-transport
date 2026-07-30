@@ -1,6 +1,6 @@
 from pprint import pprint
 
-from process_bigraph import Process, Composite, ProcessTypes
+from process_bigraph import Process, Composite, allocate_core
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
 from spatial_transport.utils import get_regular_edges, generate_voxels, add_shared_environments, plot_concentrations_2d
 import io
@@ -18,7 +18,7 @@ class SimpleDiffusion(Process):
     def __init__(self, config, core):
         super().__init__(config, core)
 
-        self.substrates = config['substrates']
+        self.substrates = self.config["substrates"]
 
     def inputs(self):
         return {
@@ -130,10 +130,7 @@ def run_simple_diffusion(core):
     print(counts)
 
 if __name__ == "__main__":
-    from spatial_transport import register_types
-    # create the core object
-    core = ProcessTypes()
-    # register data types
-    core = register_types(core)
-    core.register_process("SimpleDiffusion", SimpleDiffusion)
+    from spatial_transport.data_types import register_types
+    # create the core object and register data types and processes
+    core = register_types(allocate_core())
     run_simple_diffusion(core)
