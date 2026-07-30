@@ -1,4 +1,5 @@
 from pprint import pprint
+import copy
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -202,7 +203,9 @@ def generate_simple_cdfba_composite(voxels, model_dict, exchanges, volume, sub_r
         substrates += get_substrates(model_file=model, exchanges=exchanges)
     base_spec = make_cdfba_composite(model_dict=model_dict, exchanges=exchanges, volume=volume, interval=0.1)
     for id in voxels:
-        spec = base_spec.copy()
+        # a shallow copy would leave every voxel sharing one Species and one
+        # dFBA Results dict, so a per-voxel edit lands in all of them
+        spec = copy.deepcopy(base_spec)
         shared_environment = generate_shared_environment(volume=1, substrates=substrates, species=species_list, sub_range=sub_range, bio_range=bio_range)
         spec["Shared Environment"] = shared_environment
         voxels[id].update(spec)

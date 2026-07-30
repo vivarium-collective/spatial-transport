@@ -2,12 +2,11 @@ from pprint import pprint
 import random
 import numpy as np
 
-from process_bigraph import Process, Composite, ProcessTypes
+from process_bigraph import Process, Composite, allocate_core
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
 
-from spatial_transport.processes.diffusion import SimpleDiffusion
-from spatial_transport import register_types
-from spatial_transport.processes.diffusion import get_simple_diffusion_spec
+from spatial_transport.data_types import register_types
+from spatial_transport.processes.diffusion import SimpleDiffusion, get_simple_diffusion_spec
 
 from tyssue import Sheet, SheetGeometry
 from tyssue.draw import sheet_view
@@ -38,14 +37,14 @@ def get_tyssue_edges(sheet):
 
 def generate_tyssue_environments(sheet, substrates):
     comps = {
-        f"{i}" : {
-            "position": [float(sheet.face_df.loc[sheet.face_df.loc == i][dim]) for dim in sheet.coords]
+        f"{face}" : {
+            "position": [float(sheet.face_df.loc[face, dim]) for dim in sheet.coords]
         }
-        for i in range(len(sheet.face_df))
+        for face in sheet.face_df.index
     }
     height = sheet.vert_df.loc[0]["basal_shift"]
     for key in comps.keys():
-        area = sheet.face_df.loc[int(key)]["area"]
+        area = sheet.face_df.loc[int(key), "area"]
         volume = float(area*height)
         comps[key]['Shared Environment'] = {}
         comps[key]['Shared Environment']['volume'] = volume
@@ -123,11 +122,8 @@ if __name__ == "__main__":
         "glucose": 0.06,
         "acetate": 0.12,
     }
-    # create the core object
-    core = ProcessTypes()
-    # register data types
-    core = register_types(core)
-    core.register_process("SimpleDiffusion", SimpleDiffusion)
+    # create the core object and register data types and processes
+    core = register_types(allocate_core())
     results = run_tyssue_diffusion(core, sheet, substrates)
     pprint(len(results))
     static_sheet_video_2d(results, sheet, "glucose", vmax=10)

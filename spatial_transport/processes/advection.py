@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-from process_bigraph import Process, Composite, Step, ProcessTypes
+from process_bigraph import Process, Composite, Step, allocate_core
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
 from spatial_transport.utils import get_regular_edges, generate_voxels, add_shared_environments, plot_concentrations_2d, detect_boundary_positions
 
@@ -26,10 +26,10 @@ class SimpleAdvection(Process):
     def __init__(self, config, core):
         super().__init__(config, core)
 
-        self.substrates = config['substrates']
-        self.spacing = config['spacing']
-        self.advection = np.array(config['advection'])
-        self.boundary = config['boundary']
+        self.substrates = self.config["substrates"]
+        self.spacing = self.config["spacing"]
+        self.advection = np.array(self.config["advection"])
+        self.boundary = self.config["boundary"]
 
     def inputs(self):
         return {
@@ -119,15 +119,15 @@ class DynamicAdvection(Process):
     def __init__(self, config, core):
         super().__init__(config, core)
 
-        self.substrates = config['substrates']
-        self.spacing = config['spacing']
-        self.boundary = config['boundary']
+        self.substrates = self.config["substrates"]
+        self.spacing = self.config["spacing"]
+        self.boundary = self.config["boundary"]
 
     def inputs(self):
         return {
             "compartments": "map[compartment]",
             "edges": "map[edge_type]",
-            "advection": "map[set_list]",
+            "advection": "map[advection_vector]",
         }
 
     def outputs(self):
@@ -220,11 +220,11 @@ class Peristalsis(Process):
     def __init__(self, config, core):
         super().__init__(config, core)
 
-        self.amplitude = config["amplitude"]
-        self.velocity = config["velocity"]
-        self.wavelength = config["wavelength"]
-        self.period = config["period"]
-        self.direction = config["direction"]
+        self.amplitude = self.config["amplitude"]
+        self.velocity = self.config["velocity"]
+        self.wavelength = self.config["wavelength"]
+        self.period = self.config["period"]
+        self.direction = self.config["direction"]
 
     def inputs(self):
         return {
@@ -234,7 +234,7 @@ class Peristalsis(Process):
 
     def outputs(self):
         return {
-            "advection": "map[set_list]",
+            "advection": "map[advection_vector]",
         }
 
     def update(self, inputs, interval):
@@ -278,7 +278,7 @@ class Peristalsis(Process):
 
         # Map back to dictionary
         for eid, vel in zip(edge_ids, velocities):
-            advection[eid] = tuple(vel)
+            advection[eid] = vel.tolist()
 
         return {"advection": advection}
 
@@ -310,7 +310,6 @@ def get_dynamic_advection_spec(spacing, substrates, boundary, interval):
             "spacing": spacing,
             "substrates": substrates,
             "boundary": boundary,
-            "interval": interval,
         },
         "inputs": {
             "compartments": ["Compartments"],
@@ -333,7 +332,6 @@ def get_peristalsis_spec(amplitude, velocity, wavelength, period, direction, int
             "wavelength": wavelength,
             "period": period,
             "direction": direction,
-            "interval": interval,
         },
         "inputs": {
             "edges": ["Edges"],
@@ -341,8 +339,15 @@ def get_peristalsis_spec(amplitude, velocity, wavelength, period, direction, int
         },
         "outputs": {
             "advection": [ADVECTION],
-        }
+        },
+        "interval": interval
     }
+
+def get_advection_store(edges):
+    """Initialize the advection vector store with a zero vector on every edge"""
+    store = {"_type": "map[advection_vector]"}
+    store.update({edge_id: [0.0, 0.0, 0.0] for edge_id in edges})
+    return store
 
 def run_simple_advection(core):
     spec = {}
@@ -404,7 +409,7 @@ def run_dynamic_advection(core):
     edges = get_regular_edges(comps, periodic=False, spacing=spacing)
     spec["Edges"] = edges
     spec["Peristalsis"] = get_peristalsis_spec(amplitude=6, velocity=3, wavelength=2, period=3, direction=[1, 0, 0], interval=0.1)
-    spec[ADVECTION] = {edge_id:[0,0,0] for edge_id in edges}
+    spec[ADVECTION] = get_advection_store(edges)
     # set emitter specs
     spec["emitter"] = emitter_from_wires({
         "global_time": ["global_time"],
@@ -433,12 +438,9 @@ def run_dynamic_advection(core):
     imageio.mimsave('advection_plot.gif', frames, duration=1/60)
 
 if __name__ == "__main__":
-    from spatial_transport import register_types
-    # create the core object
-    core = ProcessTypes()
-    # register data types
-    core = register_types(core)
-    core.register_process("SimpleAdvection", SimpleAdvection)
+    from spatial_transport.data_types import register_types
+    # create the core object and register data types and processes
+    core = register_types(allocate_core())
 
     # run_simple_advection(core)
     run_dynamic_advection(core)

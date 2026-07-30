@@ -1,4 +1,12 @@
 .idea/
 .DS_Store
-spatial_transport/__pychache__/
-spatial_transport/processes/__pychache__/
+.python-version
+# these two were misspelled `__pychache__` and never matched anything
+__pycache__/
+*.ipynb_checkpoints/
+.pytest_cache/
+.coverage
+build/
+dist/
+*.egg-info/
+.venv/

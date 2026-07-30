@@ -5,16 +5,17 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import time
 
-from process_bigraph import Composite, ProcessTypes
+from process_bigraph import Composite, allocate_core
 from process_bigraph.emitter import emitter_from_wires, gather_emitter_results
 
-from cdFBA import register_types
 from cdFBA.utils import get_substrates, make_cdfba_composite, get_injector_spec
 
-
+from spatial_transport.data_types import register_types
 from spatial_transport.processes.diffusion import get_simple_diffusion_spec
-from spatial_transport.processes.advection import get_simple_advection_spec, get_peristalsis_spec, get_dynamic_advection_spec, ADVECTION
-from spatial_transport import register_types as register_types2
+from spatial_transport.processes.advection import (
+    get_simple_advection_spec, get_peristalsis_spec, get_dynamic_advection_spec,
+    get_advection_store, ADVECTION,
+)
 from spatial_transport.utils import generate_voxels, generate_shared_environment, get_regular_edges, generate_simple_cdfba_composite, plot_concentrations_2d
 from spatial_transport.plot import plot_linear_conc
 
@@ -29,8 +30,9 @@ if __name__ == "__main__":
         'deltaLac': 'E_no_LCTStex.xml'
     }
 
-    voxels = generate_voxels([24, 1, 0], spacing=1)
-    edges = get_regular_edges(voxels, periodic=False, spacing=1)
+    spacing = [1, 1, 1]
+    voxels = generate_voxels([24, 1, 0], spacing=spacing)
+    edges = get_regular_edges(voxels, periodic=False, spacing=spacing)
 
     compartments = generate_simple_cdfba_composite(voxels, model_dict, exchanges, 1, sub_range=(5, 5),
                                                    bio_range=(0.001, 0.001))
@@ -44,7 +46,7 @@ if __name__ == "__main__":
     spec = {"Compartments": compartments, "Edges": edges}
 
     spec["Dynamic Advection"] = get_dynamic_advection_spec(
-        spacing=1,
+        spacing=spacing,
         substrates=substrates,
         boundary="default",
         interval=0.1
@@ -59,7 +61,7 @@ if __name__ == "__main__":
         interval=0.1
     )
 
-    spec[ADVECTION] = {edge_id: [0, 0, 0] for edge_id in edges}
+    spec[ADVECTION] = get_advection_store(edges)
 
     for species in model_dict.keys():
         substrates.append(species)
@@ -95,9 +97,8 @@ if __name__ == "__main__":
 
     pprint(spec)
 
-    core = ProcessTypes()
-    core = register_types(core)
-    core = register_types2(core)
+    # register_types pulls in the cdFBA types and processes as well
+    core = register_types(allocate_core())
 
     sim = Composite(
         {
